@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	mcpnetbird "github.com/aantti/mcp-netbird"
@@ -68,6 +70,40 @@ var ListNetbirdPeers = mcpnetbird.MustTool(
 	listNetbirdPeers,
 )
 
+type FindNetbirdPeersParams struct {
+	Query string `mcp:"query" validate:"required" json:"query"`
+}
+
+func findNetbirdPeers(ctx context.Context, args FindNetbirdPeersParams) ([]NetbirdPeer, error) {
+	peers, err := listNetbirdPeers(ctx, ListNetbirdPeersParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	query := strings.ToLower(strings.TrimSpace(args.Query))
+	if query == "" {
+		return nil, fmt.Errorf("query must not be empty")
+	}
+
+	var matches []NetbirdPeer
+	for _, peer := range peers {
+		if strings.Contains(strings.ToLower(peer.Name), query) ||
+			strings.Contains(strings.ToLower(peer.Hostname), query) ||
+			strings.Contains(strings.ToLower(peer.DNSLabel), query) {
+			matches = append(matches, peer)
+		}
+	}
+
+	return matches, nil
+}
+
+var FindNetbirdPeers = mcpnetbird.MustTool(
+	"find_netbird_peers",
+	"Find Netbird peers by name, hostname, or DNS label. Use this instead of listing all peers when diagnosing one user.",
+	findNetbirdPeers,
+)
+
 func AddNetbirdPeerTools(mcp *server.MCPServer) {
 	ListNetbirdPeers.Register(mcp)
+	FindNetbirdPeers.Register(mcp)
 }

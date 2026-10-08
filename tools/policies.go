@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	mcpnetbird "github.com/aantti/mcp-netbird"
 	"github.com/mark3labs/mcp-go/server"
@@ -52,6 +54,54 @@ var ListNetbirdPolicies = mcpnetbird.MustTool(
 	listNetbirdPolicies,
 )
 
+type FindNetbirdPoliciesParams struct {
+	Group string `mcp:"group" validate:"required" json:"group"`
+}
+
+func findNetbirdPolicies(ctx context.Context, args FindNetbirdPoliciesParams) ([]NetbirdPolicy, error) {
+	policies, err := listNetbirdPolicies(ctx, ListNetbirdPoliciesParams{})
+	if err != nil {
+		return nil, err
+	}
+
+	group := strings.ToLower(strings.TrimSpace(args.Group))
+	if group == "" {
+		return nil, fmt.Errorf("group must not be empty")
+	}
+
+	var matches []NetbirdPolicy
+	for _, policy := range policies {
+		var rules []NetbirdPolicyRule
+		for _, rule := range policy.Rules {
+			for _, source := range rule.Sources {
+				if strings.EqualFold(source.Name, group) || strings.EqualFold(source.ID, group) {
+					rules = append(rules, rule)
+					break
+				}
+			}
+			for _, destination := range rule.Destinations {
+				if strings.EqualFold(destination.Name, group) || strings.EqualFold(destination.ID, group) {
+					rules = append(rules, rule)
+					break
+				}
+			}
+		}
+		if len(rules) > 0 {
+			policy.Rules = rules
+			matches = append(matches, policy)
+		}
+	}
+
+	return matches, nil
+}
+
+var FindNetbirdPolicies = mcpnetbird.MustTool(
+	"find_netbird_policies",
+	"Find Netbird policies with a source or destination group name or ID. Returns only matching rules.",
+	findNetbirdPolicies,
+)
+
 func AddNetbirdPolicyTools(mcp *server.MCPServer) {
 	ListNetbirdPolicies.Register(mcp)
+	FindNetbirdPolicies.Register(mcp)
 }
